@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jadwal</title>
+<style>
+:root{--bg:#14161a;--sf:#1d2128;--ln:#2b313b;--tx:#e9e6dc;--mu:#8b919c;--ac:#f0b35a;--ok:#6fbf8e}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,sans-serif;overflow:hidden}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{height:52px;display:flex;align-items:center;gap:8px;padding:0 12px}
+header b{flex:1;font-size:15px;color:var(--mu);font-weight:500}
+button{background:var(--sf);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:8px 12px;font:inherit;font-size:14px}
+#pager{height:calc(100% - 52px);display:flex;gap:10px;padding-left:10px;scroll-padding-left:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+#pager::-webkit-scrollbar{display:none}
+.pg{flex:0 0 calc(100% - 20px);scroll-snap-align:start;padding:0 0 10px;min-width:0;transition:opacity .2s}
+.win{height:100%;background:var(--sf);border:2px solid var(--ln);border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;overflow:hidden}
+.pg.cur .win{border-color:var(--ac)}
+h2{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.sub{color:var(--mu);font-size:14px;margin:2px 0 14px}
+ul{list-style:none;overflow-y:auto;flex:1;padding:0}
+.t{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--ln)}
+.t.s{padding-left:34px;border:0;padding-top:6px;padding-bottom:6px}
+.t span{flex:1;word-break:break-word}
+.t.d span{color:var(--mu);text-decoration:line-through}
+.c{width:24px;height:24px;flex:none;border:2px solid var(--mu);border-radius:50%;background:none;padding:0;color:var(--bg);font-size:14px;line-height:1}
+.d>.c{background:var(--ok);border-color:var(--ok)}
+.x{border:0;background:none;color:var(--mu);padding:4px 8px}
+.add{margin-top:10px;width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:12px;padding:13px 14px;font:inherit}
+.add.sm{margin:0 0 6px 34px;width:calc(100% - 34px);padding:8px 12px;font-size:14px}
+.empty{color:var(--mu);padding:20px 0}
+.ov{position:fixed;inset:0;background:var(--bg);z-index:5;padding:calc(env(safe-area-inset-top) + 12px) 14px 14px;overflow-y:auto;display:none}
+.ov.on{display:block}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:14px}.bar b{flex:1;font-size:18px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.grid i{font-style:normal;text-align:center;color:var(--mu);font-size:13px}
+.dy{aspect-ratio:1;border-radius:12px;background:var(--sf);border:1px solid var(--ln);color:var(--tx);padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dy.off{opacity:.3;pointer-events:none}.dy.td{border-color:var(--ac)}.dy small{font-size:11px;color:var(--ac)}
+.tst{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 18px);background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px 14px;font-size:14px;z-index:9;display:none}
+.ar{background:var(--sf);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.ar h3{font-size:14px;color:var(--mu);margin-bottom:6px;font-weight:500}
+.ar p{padding:3px 0}.ar p.d{color:var(--mu);text-decoration:line-through}
+</style></head><body>
+<header><b id="hd"></b><button id="bm">Bulan</button><button id="ba">Arsip</button></header>
+<div id="pager"></div>
+<div class="ov" id="om"><div class="bar"><button id="mp">‹</button><b id="mt"></b><button id="mn">›</button><button id="mc">Tutup</button></div><div class="grid" id="mg"></div></div>
+<div class="ov" id="oa"><div class="bar"><b>Arsip</b><button id="ac">Tutup</button></div><div id="al"></div></div>
+<div class="tst" id="tst"></div>
+<script>
+const Cal=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.CapacitorCalendar;
+let tt;function toast(m){const e=document.getElementById('tst');e.textContent=m;e.style.display='block';clearTimeout(tt);tt=setTimeout(()=>e.style.display='none',3500)}
+async function calAdd(k,t){
+  if(!Cal)return;
+  try{
+    const p=await Cal.requestFullCalendarAccess();
+    if(p.result!=='granted'){toast('Izin kalender ditolak. Task tidak masuk Google Calendar.');return}
+    let cid;try{const d=await Cal.getDefaultCalendar();cid=d.result&&d.result.id}catch(e){}
+    const [y,m,d]=k.split('-').map(Number),st=Date.UTC(y,m-1,d);
+    const o={title:t.t,startDate:st,endDate:st+864e5,isAllDay:true};if(cid)o.calendarId=String(cid);
+    const r=await Cal.createEvent(o);t.ev=r.result;save();
+  }catch(e){toast('Gagal menambah ke kalender')}
+}
+const K='jadwal_v1',$=s=>document.querySelector(s);
+let data={};try{data=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}};
+const open=new Set(),pager=$('#pager');
+const p2=n=>String(n).padStart(2,'0');
+const fmt=d=>d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+const dayAt=o=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+o);return d};
+const key=o=>fmt(dayAt(o));
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+let todayKey=key(0),count=0;
+function label(o){return o==0?'Hari ini':o==1?'Besok':dayAt(o).toLocaleDateString('id-ID',{weekday:'long'})}
+function sub(o){return dayAt(o).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}
+function html(o){
+  const L=data[key(o)]||[];
+  const rows=L.map(t=>{
+    const ex=open.has(t.id);
+    let h=`<li class="t ${t.d?'d':''}"><button class="c" data-a="chk" data-id="${t.id}">${t.d?'✓':''}</button><span data-a="exp" data-id="${t.id}">${esc(t.t)}${t.s&&t.s.length?` <small style="color:var(--mu)">${t.s.filter(x=>x.d).length}/${t.s.length}</small>`:''}</span><button class="x" data-a="del" data-id="${t.id}">✕</button></li>`;
+    if(ex){
+      (t.s||[]).forEach((s,i)=>{h+=`<li class="t s ${s.d?'d':''}"><button class="c" data-a="chk" data-id="${t.id}" data-i="${i}">${s.d?'✓':''}</button><span>${esc(s.t)}</span><button class="x" data-a="del" data-id="${t.id}" data-i="${i}">✕</button></li>`});
+      h+=`<li><input class="add sm" data-sub="${t.id}" placeholder="+ Sub-task" enterkeyhint="done"></li>`;
+    }
+    return h;
+  }).join('');
+  return `<div class="win"><h2>${label(o)}</h2><div class="sub">${sub(o)}</div><ul>${rows||'<div class="empty">Belum ada task. Tulis di bawah.</div>'}</ul><input class="add" data-main="1" placeholder="+ Tambah task" enterkeyhint="done"></div>`;
+}
+function addPages(n){for(let i=0;i<n;i++){const s=document.createElement('section');s.className='pg';s.dataset.o=count;s.innerHTML=html(count);pager.appendChild(s);count++}}
+function refresh(el){const kb=el.querySelector('input:focus');const v=kb?kb.value:'';const f=kb?(kb.dataset.sub?'[data-sub="'+kb.dataset.sub+'"]':'[data-main]'):null;el.innerHTML=html(+el.dataset.o);if(f){const n=el.querySelector(f);if(n){n.focus();}}}
+const step=()=>pager.firstElementChild.offsetWidth+10;
+function curO(){return Math.round(pager.scrollLeft/step())}
+function mark(){const o=curO();document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('cur',+p.dataset.o==o));$('#hd').textContent=o==0?'Jadwal':label(o)+', '+sub(o)}
+function goTo(o,smooth){while(count<=o+3)addPages(10);pager.scrollTo({left:o*step(),behavior:smooth?'smooth':'auto'})}
+function build(){pager.innerHTML='';count=0;todayKey=key(0);addPages(14);pager.scrollLeft=0;mark()}
+pager.addEventListener('scroll',()=>{if(pager.scrollLeft+pager.clientWidth*4>pager.scrollWidth)addPages(10);mark()},{passive:true});
+pager.addEventListener('click',e=>{
+  const pc=e.target.closest('.pg');if(pc&&!pc.classList.contains('cur')){e.preventDefault();goTo(+pc.dataset.o,true);return}
+  const b=e.target.closest('[data-a]');if(!b)return;
+  const pg=b.closest('.pg'),k=key(+pg.dataset.o),L=data[k]||[],t=L.find(x=>x.id==b.dataset.id);if(!t)return;
+  const a=b.dataset.a,i=b.dataset.i;
+  if(a=='chk'){if(i!==undefined)t.s[i].d=!t.s[i].d;else t.d=!t.d}
+  else if(a=='del'){if(i!==undefined)t.s.splice(i,1);else{if(t.ev&&Cal)Cal.deleteEventsById({ids:[t.ev]}).catch(()=>{});data[k]=L.filter(x=>x!==t)}}
+  else if(a=='exp'){open.has(t.id)?open.delete(t.id):open.add(t.id)}
+  save();refresh(pg);
+});
+pager.addEventListener('keydown',e=>{
+  if(e.key!='Enter'||!e.target.classList.contains('add'))return;
+  const v=e.target.value.trim();if(!v)return;
+  const pg=e.target.closest('.pg'),k=key(+pg.dataset.o);data[k]=data[k]||[];
+  if(e.target.dataset.sub){const t=data[k].find(x=>x.id==e.target.dataset.sub);(t.s=t.s||[]).push({t:v,d:false})}
+  else{const t={id:uid(),t:v,d:false,s:[]};data[k].push(t);calAdd(k,t)}
+  save();refresh(pg);
+});
+// bulan
+let mo=0;
+function month(){
+  const base=new Date();base.setDate(1);base.setMonth(base.getMonth()+mo);
+  $('#mt').textContent=base.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+  $('#mp').disabled=mo<=0;$('#mp').style.opacity=mo<=0?.3:1;
+  let h=['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(x=>`<i>${x}</i>`).join('');
+  const lead=(base.getDay()+6)%7;for(let i=0;i<lead;i++)h+='<span></span>';
+  const n=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();
+  for(let d=1;d<=n;d++){
+    const dt=new Date(base.getFullYear(),base.getMonth(),d,12);
+    const o=Math.round((dt-dayAt(0))/864e5);
+    const c=(data[fmt(dt)]||[]).filter(t=>!t.d).length;
+    h+=`<button class="dy ${o<0?'off':''} ${o==0?'td':''}" data-o="${o}">${d}${c?`<small>${c}</small>`:''}</button>`;
+  }
+  $('#mg').innerHTML=h;
+}
+$('#bm').onclick=()=>{mo=0;month();$('#om').classList.add('on')};
+$('#mc').onclick=()=>$('#om').classList.remove('on');
+$('#mp').onclick=()=>{if(mo>0){mo--;month()}};
+$('#mn').onclick=()=>{mo++;month()};
+$('#mg').onclick=e=>{const b=e.target.closest('.dy');if(!b)return;$('#om').classList.remove('on');goTo(+b.dataset.o,false);mark()};
+// arsip
+$('#ba').onclick=()=>{
+  const ks=Object.keys(data).filter(k=>k<todayKey&&data[k].length).sort().reverse();
+  $('#al').innerHTML=ks.length?ks.map(k=>{
+    const d=new Date(k+'T12:00:00');
+    return `<div class="ar"><h3>${d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</h3>${data[k].map(t=>`<p class="${t.d?'d':''}">${t.d?'✓':'○'} ${esc(t.t)}</p>`).join('')}</div>`}).join(''):'<div class="empty">Arsip kosong.</div>';
+  $('#oa').classList.add('on');
+};
+$('#ac').onclick=()=>$('#oa').classList.remove('on');
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&key(0)!==todayKey)build()});
+build();
+</script></body></html>
