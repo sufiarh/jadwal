@@ -13,6 +13,18 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - run: npm install
       - run: npx cap add android
+      - name: Pin androidx.core
+        run: |
+          cat >> android/build.gradle <<'EOF'
+          allprojects {
+            configurations.all {
+              resolutionStrategy {
+                force 'androidx.core:core:1.13.1'
+                force 'androidx.core:core-ktx:1.13.1'
+              }
+            }
+          }
+          EOF
       - run: sed -i 's|<application|<uses-permission android:name="android.permission.READ_CALENDAR"/><uses-permission android:name="android.permission.WRITE_CALENDAR"/><application|' android/app/src/main/AndroidManifest.xml
       - run: npx cap sync android
       - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug
